@@ -67,14 +67,14 @@ function compute_cut(x̂)
     for s = 1:3
         aux1, aux2 = Q_aux(x̂, Ys[s, :])
         Q̄ += aux1
-        π̄[s] += aux2 ⋅ Ys[:, s]
+        π̄ += aux2 
     end
     Q̄ /= 3
     π̄ /= 3
     return (x -> Q̄ + π̄  ⋅ (x - x̂))
 end
 
-Q̲ = -108390.0
+Q̲ = -1e6
 # Define master problem
 master = Model(HiGHS.Optimizer)
 set_silent(master)
