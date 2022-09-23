@@ -1,0 +1,40 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath, amssymb}
+\usepackage[margin=1in]{geometry}
+
+\title{Portfolio Optimization}
+\author{Lucas Ximenes Guilhon}
+
+\begin{document}
+
+\maketitle
+
+Portfolio Optimization is a problem that can take on many different forms. We will establish what a general deterministic portfolio optimization problem looks like, and then
+propose improvements to it, using the tools that we've learned and will learn in the course.
+\section*{Formulation}
+Our base problem will consider the following properties/parameters:
+\begin{itemize}
+\item $M$ assets, and $r_n$ is the expected return of the $n$-th asset.
+\item The amount allocated to each asset $w_1, w_2, \dots, w_M$ must sum up to our total budget $B$.
+\item We are strictly buying assets, so $w_i \geq 0$ for all $i$.
+\item We wish to maximize the expected return of the portfolio.
+\end{itemize}
+The deterministic form of the problem described above is given by:
+\begin{equation}
+  \begin{aligned}
+  \max_{w_1, w_2, \dots, w_M} & \sum_{n=1}^M w_n r_n\\
+  \textrm{s.t.} \quad & \sum_{n=1}^M w_n = B\\
+    & w_n \geq 0 \quad \forall n=1..M
+  \end{aligned}
+\end{equation}
+\section*{Improvements}
+The main improvements that we will propose are:
+\begin{itemize}
+  \item Introduce robustness to the problem by considering a distribution of possible returns for each asset. $r_i$ now becomes $\bar{r}_i \in R_i$ where $R_i$ is the set of possible returns for asset $i$.
+  \item Utilize a risk measure (preferably a coherent one, like CV@R) and constrain our portfolio to be within a certain risk tolerance $T$.
+\end{itemize}
+But it's worth mentioning that other improvements can be added as the project progresses. A short consideration to be made, is that, considering second improvement mentioned above,
+we could model our optimization problem as a minimization of the risk constrained by minimal expected return. This is one of the many ways to interoperate risk and return in a portfolio optimization problem
+and we may explore one or more of these possibilities.
+\end{document}
