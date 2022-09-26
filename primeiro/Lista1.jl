@@ -7,7 +7,7 @@ demand D newspapers of the day is unknown. The number of newspapers y is sold at
 agreement with the newspaper editor: the number w of unsold newspapers can be returned to the editor, who pays a r price for him.
 =#
 
-d = collect(50:10:150) # Demand vector [50,150]
+d = collect(60:1:150) # Demand vector [50,150]
 N = length(d)
 p = (1/N).*ones(N,1)
 
@@ -15,6 +15,7 @@ p = (1/N).*ones(N,1)
 # selling and returning the newspapers, given a demand d.
 function Q(x,d)
     m = Model(HiGHS.Optimizer)
+    set_silent(m)
     @variables(m, 
     begin
         y ≥ 0
@@ -39,7 +40,7 @@ Plots.plot(f, collect(50:10:200))
 # Turning the problem into a deterministic one by enumerating all the cases of demand d, then solving it.
 
 m = Model(HiGHS.Optimizer)
-
+set_silent(m)
 @variables(m,
 begin
     0 ≤ x ≤ 150
@@ -58,7 +59,7 @@ end)
 optimize!(m)
 
 value(x) # Optimal amount of newspapers to buy, in this case, 130.
-
+objective_value(m)
 # Calculating value of stochastic solution
 
 g(x) = 10*x + Q(x, 100) # Here we calculate the objective value of the deterministic version of the problem, where we use the the demand as the 

@@ -11,6 +11,7 @@ Ys = [2 2.4 16; 2.5 3 20; 3 3.6 24]
 
 function Q(x, Y) # big Y stands for yield, and x is the land allocated to each crop
     m = Model(HiGHS.Optimizer)
+    set_silent(m)
     @variables(m, 
     begin
         y[1:3] ≥ 0
@@ -74,7 +75,10 @@ function compute_cut(x̂)
     return (x -> Q̄ + π̄  ⋅ (x - x̂))
 end
 
+# Initial lower bound with no real intuition behind it, because, for some reason, when trying the initial lower bound as
+# the objective value of the actual optimal solution, the algorithm would not converge to the solution.
 Q̲ = -1e6
+
 # Define master problem
 master = Model(HiGHS.Optimizer)
 set_silent(master)
@@ -105,4 +109,6 @@ while (bestUB-LB) > 0.1
     @show bestUB, LB, GAP
 end
 
+
+# The allocation of land to each crop, which converged to the solution obtained in the deterministic equivalent! (170, 8)
 value.(x)
