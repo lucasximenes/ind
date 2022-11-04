@@ -103,8 +103,10 @@ Plots.plot(quantiles', [y;;y]', palette = :darktest, linewidth = 2, legend = :to
 # Obtaining 10 candidate solutions with 10 batches of 1000 samples
 demand_matrix = rand(cont_unif, M, 1000)
 x̂_vector = zeros(M)
+x̂_obj_vector = zeros(M)
 for i in 1:M
     obj, x = Q(demand_matrix[i,:])
+    x̂_obj_vector[i] = obj
     x̂_vector[i] = x
 end
 
@@ -116,5 +118,13 @@ for (i,x) in enumerate(x̂_vector)
     UB_V[i] = 10*x + (1/K)*sum(Second_Stage(x, out_of_sample[i,j]) for j in 1:K)
 end
 
-UB_V
-LB_V
+@show [x̂_obj_vector ;; UB_V ;; x̂_vector]
+
+chosen_x̂ = x̂_vector[5]
+K_vector = collect(100:100:1000)
+new_UB_V = zeros(length(K_vector))
+for (index, K) in enumerate(K_vector)
+    out_of_sample = rand(cont_unif, M, K)
+    new_UB_V[index] = 10*chosen_x̂ + (1/K)*sum(Second_Stage(chosen_x̂, out_of_sample[index,j]) for j in 1:K)
+end
+new_UB_V
