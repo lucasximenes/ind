@@ -1,10 +1,11 @@
 using JuMP, Plots, HiGHS, PlotlyJS
 plotlyjs()
 
-N = 10
-d = collect(60:N:150)
+d = collect(60:1:150)
+N = length(d)
 p = (1/N)*ones(N)
 
+# Original recourse function for purpouses of evaluation and plotting
 function Q(x,d)
     m = Model(HiGHS.Optimizer)
     set_silent(m)
@@ -73,6 +74,7 @@ end
 Q̲ = -5000
 # Define master problem
 master = Model(HiGHS.Optimizer)
+set_silent(master)
 @variables(master, begin
     0 <= x <= 200
     θ ≥ Q̲
@@ -100,4 +102,8 @@ while (bestUB-LB) > 0.1
     vline!([x̂])
 end
 
+#Run current() to obtain the lines plotted during the execution of the loops
+current()
+
+# Final result of the amount of newspapers to buy came close to the optimal value obtained in the determinsitic equivalent, which is 128. (Benders achieved 128.5)
 value(x)
