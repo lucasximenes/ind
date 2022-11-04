@@ -67,6 +67,7 @@ function compute_cut(x̂)
     π̄ = [0, 0, 0]
     for s = 1:3
         aux1, aux2 = Q_aux(x̂, Ys[s, :])
+        @show aux2
         Q̄ += aux1
         π̄ += aux2 
     end
@@ -97,7 +98,7 @@ x̂ = value.(x)
 UB = f(x̂)
 bestUB = UB
 
-while (bestUB-LB) > 0.1
+# while (bestUB-LB) > 0.1
     l = compute_cut(x̂)
     @constraint(master, θ ≥ l(x))
     optimize!(master)
@@ -107,7 +108,7 @@ while (bestUB-LB) > 0.1
     bestUB = min(bestUB, UB)
     GAP = (bestUB-LB)
     @show bestUB, LB, GAP
-end
+# end
 
 
 # The allocation of land to each crop, which converged to the solution obtained in the deterministic equivalent! (170, 8)
