@@ -1,19 +1,45 @@
 using JuMP, LinearAlgebra, Statistics, DataFrames, AlphaVantage, CSV, HiGHS
 
-
-function cvar(x)
+function cvar(x, returns, α)
+    n_scenarios = size(returns, 1)
     m = Model(HiGHS.Optimizer)
-    set_silent(m)
+    @variable(m, θ[1:n_scenarios] >= 0)
     @variable(m, l)
-    @variable(m, θ[1:N_scenarios])
-    @constraint(m, con1[s=1:N_scenarios], θ[s] ≥ 0)
-    @constraint(m, con2[s=1:N_scenarios], θ[s] ≥ (-r[s, :] ⋅ x) - l)
-    @objective(m, Min, l + sum(p[s]*θ[s] for s=1:N_scenarios)/(1-α))
+    @constraint(m, con3[s=1:n_scenarios], θ[s] ≥ -returns[s, :] ⋅ x - l)
+    @objective(m, Min, l + sum(θ)*(1/n_scenarios)/(1-α))
     optimize!(m)
-    return objective_value(m)
+    return objective_value(m), value.(l)
 end
 
-function robust_cvar_allocation(returns, T_r, T_p, α, Γ)
+function backtest(window_size::Int64, brokerage_rate::Float64, risk_threshold::Float64,
+    start_date::Int64, n_steps::Int64, initial_funds)
+    if start_date > 1000
+        println("Choose a starting date before 1000 days ago")
+    end
+    #Reading returns data
+    returns_df = CSV.read(joinpath(@__DIR__, "./returns.csv"), DataFrame)
+    #Converting to matrix
+    returns = Matrix{Float64}(returns_df)
+    returns = returns[(start_date - window_size - n_steps):start_date, :]
+
+    allocation = robust_cvar_allocation(returns[n_steps:(window_size + n_steps), :],
+        risk_threshold, 0.95, 1, initial_funds, 1, 1)
+    
+    portfolio_returns_future = zeros(n_steps)
+    #Start rolling window backtest
+    for i in 1:n_steps
+        portfolio_returns_future[i] = allocation ⋅ returns[n_steps - i, :]
+        allocation = robust_cvar_allocation(returns[(n_steps - i):(window_size + n_steps - i), :],
+         risk_threshold, 0.95, 1, portfolio_returns_future[i], 1, 1)
+        if allocation === nothing
+            println("No allocation found for step ", i)
+            return portfolio_returns_future
+        end
+    end
+    return portfolio_returns_future
+end
+
+function robust_cvar_allocation(returns, T_r, α, Γ, funds, γ, former_allocation)
     m = Model(HiGHS.Optimizer)
     n_assets = size(returns, 2)
     n_scenarios = size(returns, 1)
@@ -23,23 +49,23 @@ function robust_cvar_allocation(returns, T_r, T_p, α, Γ)
     σ = σ[1,:]
     @variables(m,
     begin
-        ω ≥ 0
+        P
         x[1:n_assets] ≥ 0
         λ[1:n_assets] ≥ 0
         Δ_p[1:n_assets] ≥ 0
-        Δ_n[1:n_assets] ≥ 0
+        Δ_n[1:n_assets] ≤ 0
         θ[1:n_scenarios] ≥ 0
         l
-        β ≥ 0
+        β
     end)
-    @constraint(m, con1, sum(x) == 1)
-    @constraint(m, con2, ω ≤ r̄ ⋅ x)
+    @constraint(m, con1, sum(x) == funds)
+    @constraint(m, con2, P ≤ r̄ ⋅ x)
     @constraint(m, con3[s=1:n_scenarios], θ[s] ≥ -returns[s, :] ⋅ x - l)
-    @constraint(m, con4[s=1:n_scenarios], l + sum(θ[s])*(1/n_scenarios)/(1-α) ≤ T_r)
-    @constraint(m, con5[n=1:n_assets], Δ_p[n] - Δ_n[n] ≥ x[n])
-    @constraint(m, con6[n=1:n_assets], σ[n]*(Δ_p[n] + Δ_n[n]) - β - λ[n] ≥ 0)
-    @constraint(m, con7[n=1:n_assets], -Γ*β - sum(λ) + sum(r̄[n]*(Δ_p[n] - Δ_n[n])) ≥ T_p)
-    @objective(m, Max, ω)
+    @constraint(m, con4, l + sum(θ)*(1/n_scenarios)/(1-α) ≤ T_r*funds)
+    @constraint(m, con5[n=1:n_assets], -Δ_p[n] + Δ_n[n] ≥ -x[n])
+    @constraint(m, con6[n=1:n_assets], -σ[n]*(Δ_p[n] + Δ_n[n]) - β - λ[n] ≥ 0)
+    @constraint(m, con7[n=1:n_assets], -Γ*β - sum(λ) + sum(r̄[n]*(Δ_p[n] - Δ_n[n])) ≥ P)
+    @objective(m, Max, P)
     optimize!(m)
     #Check if the problem is feasible
     if termination_status(m) != MOI.OPTIMAL
@@ -52,21 +78,12 @@ end
 
 #Reading returns data
 returns_df = CSV.read(joinpath(@__DIR__, "./returns.csv"), DataFrame)
+mat = Matrix{Float64}(returns_df)
+allocation = robust_cvar_allocation(mat, 0.039, 0.95, 1, 10e6, 0.01, 0.01)
 
-#Converting to matrix
-returns = Matrix{Float64}(returns_df)
 
-@show returns[1:5, 1:5]
+allocation
+cvar(allocation, mat, 0.95)
 
-allocation = robust_cvar_allocation(returns, -5, 0.0, 0.95, 1)
 
-size(returns, 2)
-
-r̄ = mean(returns, dims=1)
-
-# Convert to vector
-r̄ = r̄[1, :]
-
-allocation ⋅ r̄
-
-cvar(allocation)
+returns_vec = backtest(100, 0.01, 0.1, 300, 50, 10e6)
