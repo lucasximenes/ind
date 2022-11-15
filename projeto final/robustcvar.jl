@@ -3,6 +3,7 @@ using JuMP, LinearAlgebra, Statistics, DataFrames, AlphaVantage, CSV, HiGHS
 function cvar(x, returns, α)
     n_scenarios = size(returns, 1)
     m = Model(HiGHS.Optimizer)
+    set_silent(m)
     @variable(m, θ[1:n_scenarios] >= 0)
     @variable(m, l)
     @constraint(m, con3[s=1:n_scenarios], θ[s] ≥ -returns[s, :] ⋅ x - l)
@@ -27,11 +28,12 @@ function backtest(window_size::Int64, brokerage_rate::Float64, risk_threshold::F
     
     portfolio_returns_future = zeros(n_steps)
     #Start rolling window backtest
-    for i in 1:n_steps
-        portfolio_returns_future[i] = allocation ⋅ returns[n_steps - i, :]
+    for i in 1:n_steps-1
+        portfolio_returns_future[i] = allocation ⋅ (1 .+ returns[n_steps - i, :])
         allocation = robust_cvar_allocation(returns[(n_steps - i):(window_size + n_steps - i), :],
          risk_threshold, 0.95, 1, portfolio_returns_future[i], 1, 1)
-        if allocation === nothing
+        println(allocation)
+         if allocation === nothing
             println("No allocation found for step ", i)
             return portfolio_returns_future
         end
@@ -41,6 +43,7 @@ end
 
 function robust_cvar_allocation(returns, T_r, α, Γ, funds, γ, former_allocation)
     m = Model(HiGHS.Optimizer)
+    set_silent(m)
     n_assets = size(returns, 2)
     n_scenarios = size(returns, 1)
     r̄ = mean(returns, dims=1)
@@ -81,8 +84,6 @@ returns_df = CSV.read(joinpath(@__DIR__, "./returns.csv"), DataFrame)
 mat = Matrix{Float64}(returns_df)
 allocation = robust_cvar_allocation(mat, 0.039, 0.95, 1, 10e6, 0.01, 0.01)
 
-
-allocation
 cvar(allocation, mat, 0.95)
 
 
