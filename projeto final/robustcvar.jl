@@ -22,7 +22,7 @@ function backtest(window_size::Int64, brokerage_rate::Float64, risk_threshold::F
     #Reading returns data
     returns_df = CSV.read(joinpath(@__DIR__, "./returns.csv"), DataFrame)
     
-    #Converting to matrix
+#Converting to matrix
     returns = Matrix{Float64}(returns_df)
     returns = returns[(start_date - window_size - n_steps):start_date, :]
 
@@ -101,14 +101,13 @@ function robust_cvar_allocation(returns, T_r, α, Γ, funds, γ, former_allocati
         c[1:n_assets] ≥ 0
         v[1:n_assets] ≥ 0
     end)
-    @constraint(m, con0, sum(x) == funds - γ*sum((c[n] + v[n]) for n in 1:n_assets))
-    @constraint(m, con1[n=1:n_assets], x[n] == former_allocation[n] + c[n] - v[n] - γ*(c[n] + v[n]))
-    @constraint(m, con2, P ≤ r̄ ⋅ x)
+    @constraint(m, con0, sum(v) == sum(c) + γ*(sum(c .+ v)))
+    @constraint(m, con1[n=1:n_assets], x[n] == former_allocation[n] + c[n] - v[n])
     @constraint(m, con3[s=1:n_scenarios], θ[s] ≥ -returns[s, :] ⋅ x - l)
-    @constraint(m, con4, l + sum(θ)*(1/n_scenarios)/(1-α) ≤ T_r*funds)
+    @constraint(m, con4, l + sum(θ)*(1/n_scenarios)/(1-α) ≤ T_r*sum(former_allocation))
     @constraint(m, con5[n=1:n_assets], -Δ_p[n] + Δ_n[n] ≥ -x[n])
     @constraint(m, con6[n=1:n_assets], -σ[n]*(Δ_p[n] + Δ_n[n]) - β - λ[n] ≥ 0)
-    @constraint(m, con7, Γ*β + sum(λ) + sum(r̄ .* (Δ_p .- Δ_n)) ≥ P)
+    @constraint(m, con7, Γ*β + sum(λ) + sum((1 .+ r̄) .* (Δ_p .- Δ_n)) ≥ P)
     @objective(m, Max, P)
     optimize!(m)
     #Check if the problem is feasible
@@ -123,11 +122,23 @@ end
 #Reading returns data
 returns_df = CSV.read(joinpath(@__DIR__, "./returns.csv"), DataFrame)
 mat = Matrix{Float64}(returns_df)
-initial_allocation = [10e6/length(mat[1, :]) for i in 1:length(mat[1, :])]
+initial_allocation = [10/length(mat[1, :]) for i in 1:length(mat[1, :])]
 
 allocation = robust_cvar_allocation(mat, 0.05, 0.95, 2, 10e6, 0.01, initial_allocation)
 
 cvar(allocation, mat, 0.95)
 
 
-final_df = backtest(100, 0.01, 0.05, 300, 50, 10e6, [0.1, 0.25, 0.5, 0.75, 1], true)
+final_df = backtest(100, 0.00, 100.0, 300, 50, 10, [0.0, 0.1, 0.25, 0.5, 0.75, 1], true)
+
+withenv("LINES" => 20) do
+    display(final_df)
+end
+
+CSV.write("resultado.csv", final_df)
+
+
+
+initial_allocation
+
+allocation = robust_cvar_allocation(mat, 0.05, 0.95, 2, 10e6, 0.01, initial_allocation)
