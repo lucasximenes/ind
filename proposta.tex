@@ -1,7 +1,7 @@
 \documentclass{article}
 \usepackage[utf8]{inputenc}
 \usepackage{amsmath, amssymb}
-\usepackage[margin=1in]{geometry}
+\usepackage[margin=1.25in]{geometry}
 
 \title{Portfolio Optimization}
 \author{Lucas Ximenes Guilhon}
@@ -29,12 +29,99 @@ The deterministic form of the problem described above is given by:
   \end{aligned}
 \end{equation}
 \section*{Improvements}
-The main improvements that we will propose are:
+The main improvements (other improvements can be added as the project progresses) that we will propose are:
 \begin{itemize}
   \item Introduce robustness to the problem by considering a distribution of possible returns for each asset. $r_i$ now becomes $\bar{r}_i \in R_i$ where $R_i$ is the set of possible returns for asset $i$.
   \item Utilize a risk measure (preferably a coherent one, like CV@R) and constrain our portfolio to be within a certain risk tolerance $T$.
 \end{itemize}
-But it's worth mentioning that other improvements can be added as the project progresses. A short consideration to be made, is that, considering second improvement mentioned above,
-we could model our optimization problem as a minimization of the risk constrained by minimal expected return. This is one of the many ways to interoperate risk and return in a portfolio optimization problem
+A short consideration to be made, is that, considering second improvement mentioned above,
+we could model our optimization problem as a minimization of the risk constrained by minimal expected return. This is one of the many ways to inter operate risk and return in a portfolio optimization problem
 and we may explore one or more of these possibilities.
+\section*{Development}
+\begin{equation}
+  \begin{aligned}
+  \max_{x \in R^n} &\quad \bar{r}^\intercal x\\
+  \textrm{s.t.} \quad & \sum_{i=1}^M x_i = B\\
+    & x_i \geq 0 \quad \forall i=1..M
+  \end{aligned}
+\end{equation}
+Adding a risk constraint.
+\begin{equation}
+  \begin{aligned}
+  \max_{x \in R^n} &\quad \bar{r}^\intercal x\\
+  \textrm{s.t.} \quad & \sum_{i=1}^M x_i = 1\\
+    & x_i \geq 0 \quad \forall i=1..M\\
+    & CV@R(x) \leq T_r
+  \end{aligned}
+\end{equation}
+Thankfully, the CV@R can be formulated as a linear programming problem, so we can use it as a constraint in our optimization.
+The initial, non-linear formulation, is given by:
+\begin{equation}
+  CV@R(X) = \min_{l \geq 0} \quad l + \frac{1}{1-\alpha} \sum_{i=1}^M p_i \cdot \max\{0, X - l\}
+\end{equation}
+And in order for it to become a linear programming problem, we need to reformulate the maximization with the following constraints:
+\begin{equation}
+  \begin{aligned}
+    CV@R(X) = \min_{l \geq 0} & \quad l + \frac{1}{1-\alpha} \sum_{i=1}^M p_i \cdot \theta_i\\
+    \textrm{s.t.} \quad & \theta_i \geq X_i - l \quad \forall i=1..M\\
+    & \theta_i \geq 0 \quad \forall i=1..M
+  \end{aligned}
+\end{equation}
+Where X is, in our case, the set of all possible profits and losses, $p_i$ is the probability of each return, and $\alpha$ is the confidence level.
+Now, we can substitute the CV@R constraint in our original problem, and we get:
+\begin{equation}
+  \begin{aligned}
+  \max_{x, l, \theta} &\quad \bar{r}^\intercal x\\
+  \textrm{s.t.} \quad & \sum_{i=1}^M x_i = 1\\
+    & x_i \geq 0 \quad \forall i=1..M\\
+    & \min_{l \geq 0} \quad l + \frac{1}{1-\alpha} \sum_{i=1}^M p_i \cdot \theta_i \leq T_r\\
+    & \theta_s \geq 0, \quad \forall s=1..N\\
+    & \theta_s \geq -r_sx - l, \quad \forall s=1..N\\
+  \end{aligned}
+\end{equation}
+However, we've now introduced a minimization problem inside a constraint 
+\begin{equation}
+  \begin{aligned}
+  \max_{x, l, \theta} &\quad \bar{r}^\intercal x\\
+  \textrm{s.t.} \quad & \sum_{i=1}^M x_i = 1\\
+    & x_i \geq 0 \quad \forall i=1..M\\
+    & l + \frac{\sum_s p_s \theta_s}{1-\alpha} \leq T_r\\
+    & \theta_s \geq 0, \quad \forall s=1..N\\
+    & \theta_s \geq -r_sx - l, \quad \forall s=1..N\\
+  \end{aligned}
+\end{equation}
+In order to add the robust constraint that enforces the asset allocation to have a greater return than a specific threshold. The primal version of this constraint is the following problem:
+\begin{equation}
+  \begin{aligned}
+  \min_{r, z\in R^n} &\quad \bar{r}^\intercal x\\
+  \textrm{s.t.} \quad
+    & z_i\sigma_i - r_i \geq -\bar{r}_i\\
+    & z_i\sigma_i + r_i \geq \bar{r}_i\\
+    & -z_i \geq -1\\
+    & -\sum_i z_i \geq - \Gamma\\
+  \end{aligned}
+\end{equation}
+And the dual is the following:
+\begin{equation}
+  \begin{aligned}
+  \max_{\lambda, \beta, \Delta^+, \Delta^- \leq 0} &\quad -\Gamma \beta - \sum_i \lambda_i + \sum_i \bar{r}_i(\Delta_i^+ - \Delta_i^-) \\
+  \textrm{s.t.} \quad & \Delta_i^+ - \Delta_i^- \geq x_i\\
+    & \sigma_i(\Delta_i^+ - \Delta_i^-) - \lambda_i - \beta \geq 0\\
+  \end{aligned}
+\end{equation}
+Now, we can obtain our problem with robust and risk-aversion constraints:
+\begin{equation}
+  \begin{aligned}
+  \max_{x, l, \theta, \lambda, \beta, \Delta^+, \Delta^-, T_p} &\quad T_p\\
+  \textrm{s.t.} & \quad T_p \leq \bar{r}_i\\
+    & x_i \geq 0 \quad \\
+    & l + \frac{\sum_s p_s \theta_s}{1-\alpha} \leq T_r\\
+    & x_i = x_{t-1} + c_i - v_i - \gamma(c_i + v_i)\\
+    & \theta_s \geq 0, \quad \forall s=1..N\\
+    & \theta_s \geq -r_sx - l, \quad \forall s=1..N\\
+    &-\Gamma \beta - \sum_i \lambda_i + \sum_i \bar{r}_i(\Delta_i^+ - \Delta_i^-) \geq T_p\\
+    & \Delta_i^+ - \Delta_i^- \geq x_i\\
+    & \sigma_i(\Delta_i^+ - \Delta_i^-) - \lambda_i - \beta \geq 0\\
+  \end{aligned}
+\end{equation}
 \end{document}

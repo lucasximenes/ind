@@ -1,4 +1,6 @@
-using JuMP, LinearAlgebra, Statistics, DataFrames, AlphaVantage, CSV, HiGHS
+using JuMP, LinearAlgebra, Statistics, DataFrames, AlphaVantage, CSV, HiGHS, StatsPlots
+
+plotlyjs()
 
 function cvar(x, returns, α)
     n_scenarios = size(returns, 1)
@@ -22,7 +24,7 @@ function backtest(window_size::Int64, brokerage_rate::Float64, risk_threshold::F
     #Reading returns data
     returns_df = CSV.read(joinpath(@__DIR__, "./returns.csv"), DataFrame)
     
-#Converting to matrix
+    #Converting to matrix
     returns = Matrix{Float64}(returns_df)
     returns = returns[(start_date - window_size - n_steps):start_date, :]
 
@@ -44,8 +46,6 @@ function backtest(window_size::Int64, brokerage_rate::Float64, risk_threshold::F
         allocation = robust_cvar_allocation(window, risk_threshold, 0.95, robustness, initial_funds, brokerage_rate, uniform_allocation)
         
         portfolio_returns_future = zeros(n_steps)
-        
-        println(allocation, size(window))
 
         #Start rolling window backtest
         for i in 1:n_steps-1
@@ -86,7 +86,7 @@ function robust_cvar_allocation(returns, T_r, α, Γ, funds, γ, former_allocati
     n_scenarios = size(returns, 1)
     r̄ = mean(returns, dims=1)
     σ = std(returns, dims=1)
-    r̄ = r̄[1,:]
+    r̄ = r̄[1,:] .+ ones(n_assets)
     σ = σ[1,:]
     @variables(m,
     begin
@@ -107,7 +107,8 @@ function robust_cvar_allocation(returns, T_r, α, Γ, funds, γ, former_allocati
     @constraint(m, con4, l + sum(θ)*(1/n_scenarios)/(1-α) ≤ T_r*sum(former_allocation))
     @constraint(m, con5[n=1:n_assets], -Δ_p[n] + Δ_n[n] ≥ -x[n])
     @constraint(m, con6[n=1:n_assets], -σ[n]*(Δ_p[n] + Δ_n[n]) - β - λ[n] ≥ 0)
-    @constraint(m, con7, Γ*β + sum(λ) + sum((1 .+ r̄) .* (Δ_p .- Δ_n)) ≥ P)
+    # @constraint(m, con7, Γ*β + sum(λ) + sum((1 .+ r̄) .* (Δ_p .- Δ_n)) ≥ P)
+    @constraint(m, con7, Γ*β + sum(λ) + sum(r̄ .* (Δ_p .- Δ_n)) ≥ P)
     @objective(m, Max, P)
     optimize!(m)
     #Check if the problem is feasible
@@ -129,16 +130,12 @@ allocation = robust_cvar_allocation(mat, 0.05, 0.95, 2, 10e6, 0.01, initial_allo
 cvar(allocation, mat, 0.95)
 
 
-final_df = backtest(100, 0.00, 100.0, 300, 50, 10, [0.0, 0.1, 0.25, 0.5, 0.75, 1], true)
-
-withenv("LINES" => 20) do
-    display(final_df)
-end
+final_df = backtest(100, 0.01, 100.0, 672, 100, 10, [0.0, 0.25, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0], true)
 
 CSV.write("resultado.csv", final_df)
 
+delete!(final_df, [99])
 
+@df final_df plot(cols(), legend = :outerbottomleft)
 
-initial_allocation
-
-allocation = robust_cvar_allocation(mat, 0.05, 0.95, 2, 10e6, 0.01, initial_allocation)
+@show returns_df
